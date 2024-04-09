@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Drag and Drop (Test 1)</title>
+    <style>
+        ul {
+            list-style: none;
+            padding: 0;
+            position: relative;
+        }
+
+        .list-item {
+            padding: 10px;
+            margin: 5px;
+            white-space: nowrap;
+            border: 1px solid black;
+            cursor: move;
+            margin-left: 100px;
+        }
+
+        .addButton {
+            margin-left: 100px;
+        }
+
+        textarea {
+            width: 500px;
+        }
+
+        #container>.listcnt>.list-item {
+            margin-left: 5px;
+        }
+
+        #container>.listcnt>.addButton {
+            margin-left: 5px;
+        }
+    </style>
+
+</head>
+
+<body onload="init();">
+    <p>記事作成ツール</p>
+    <!-- ローカル用 -->
+    <!-- <input type="button" value="read" id="readbutton" onclick="readFile();" tabindex="-1">
+    <input type="button" value="write" id="writebutton" onclick="writeFile();" tabindex="-1">
+    <input type="button" value="resetfile" id="resetbutton" onclick="resetFile();" tabindex="-1"> -->
+    <!-- サーバ用 -->
+    <form name="BodyForm">
+    <select id="dataselect" name="dataselect"></select>
+    <input type="button" value="read" id="readserv" onclick="readFromServer();" tabindex="-1">
+    <input type="button" value="save" id="savebutton" onclick="save2Server();" tabindex="-1">
+
+    <input type="button" value="new" id="newbutton" onclick="resetList();" tabindex="-1">
+
+    <br>
+    <div id="container" class="container-style">
+        <ul class="listcnt"><input type="button" value="+" onclick="addList(this)" class="addButton" tabindex="-1"></ul>
+    </div>
+    <div id="dataarea"></div>
+</form>
+</body>
+<script>
+    /* 保存先を各メソッドから参照できるようにファイル選択ダイアログはグローバルに持つ */
+    let fileInput;
+    let fileOutput;
+    let datalist;
+    let tabindex=1;
+    async function init() {
+        //初期化処理でドラッグ&ドロップができるようにイベント登録。
+        addEvent(document.getElementById('container'));
+
+        //Ajaxのテスト１
+        // document.getElementById("readserv").addEventListener('click', function (event) {
+        //     event.preventDefault();
+        //     let xhr = new XMLHttpRequest();
+        //     xhr.open("POST", "./bin/serv.php", true);
+        //     xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+        //     xhr.onreadystatechange = function () {
+        //         if (this.readyState === 4 && this.status === 200) {
+        //             // handle response here
+        //             alert(this.responseText);
+        //         }
+        //     };
+        //     xhr.send("data=send data2");
+        // });
+
+        datalist = document.getElementById('dataselect');
+        // newop = document.createElement("option");
+        datalist.innerHTML = await (await fetch("./bin/getlist.php")).text();
+        // datalist.appendChild(newop);
+    }
+    async function readFromServer() {
+        let param = {"key":document.getElementById('dataselect').value};
+        let query = new URLSearchParams(param);
+        resetList();
+        processData(await (await fetch("./bin/read.php?"+query)).text());
+      }
+    async function save2Server() {
+        form = new FormData();
+        form.append("text", JSON.stringify(getJSONData()));
+        alert(await (await fetch("./bin/save.php", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(getJSONData())
+        })).text());
+        datalist.innerHTML = await (await fetch("./bin/getlist.php")).text();
+    }
+    function resetFile() {
+        fileInput = undefined;
+        fileOutput = undefined;
+    }
+    function resetList() {
+        element = document.getElementById("container").getElementsByClassName("listcnt")[0]
+        element.innerHTML = "";
+        replaceAddButton(element);
+        resetFile();
+    }
+    /* ファイル出力。 */
+    async function writeFile() {
+        /*ファイル選択ダイアログで選択未済の場合はアラート出して終わる*/
+        // let file = fileInput.files[0];
+        //let file = await window.showSaveFilePicker();
+        if (fileOutput == null) {
+            fileOutput = await window.showSaveFilePicker();
+        }
+        // let dataarea = document.getElementById("dataarea");
+        // dataarea.innerText = JSON.stringify(JSONData);
+        writeTextToFile(JSON.stringify(getJSONData()), fileOutput);
+    }
+    function getJSONData() {
+        let JSONData = {};
+        //最上位のリストを取得
+        let element = document.getElementById("container").getElementsByClassName("listcnt")[0];
+        let lists = [];
+        getTagNameChildNodes(element, lists, "list-item");
+        // element.getElementsByClassName("list-item");
+        for (let i = 0; i < lists.length; i++) {
+            JSONData[i] = createJSON(lists[i]);
+        }
+        return JSONData;
+    }
+    /* リストからJSONオブジェクト作成 */
+    /* 引数はリストアイテム「li」 */
+    function createJSON(element) {
+        let ret = {};
+        ret.text = "";
+        ret.childlen = 0;
+        ret.childitem = {};
+
+        ret.text = element.getElementsByClassName("text")[0].value;
+        let childlist = [];
+        let childlist2 = [];
+        getTagNameChildNodes(element, childlist2, "listcnt");
+        getTagNameChildNodes(childlist2[0], childlist, "list-item");
+        //childlist = element.getElementsByClassName("listcnt")[0].getElementsByClassName("list-item");
+        ret.childlen = childlist.length;
+        if (ret.childlen == 0) return ret;
+        for (let i = 0; i < ret.childlen; i++) {
+            ret.childitem[i] = createJSON(childlist[i]);
+        }
+        return ret;
+    }
+    async function readFile() {
+        /*ファイル選択ダイアログで選択未済の場合はアラート出して終わる*/
+        if (fileInput == null) {
+            fileInput = await window.showOpenFilePicker();
+        }
+        let file = await fileInput[0].getFile();
+        resetList();
+        // element = document.getElementById("container").getElementsByClassName("listcnt")[0].getElementsByTagName("li");
+        // for (const item of Object.keys(data)) {
+        //     item.remove();
+        // }
+        /* ファイル読み込み処理。ネットのコピペ。 */
+        /* 読み込んだ後processDataメソッドで画面描画 */
+        var reader = new FileReader();
+        reader.onload = function (event) {
+            const data = event.target.result;
+            processData(data);
+        };
+        reader.readAsText(file);
+    }
+    async function writeTextToFile(text, file) {
+        let writablefile = await file.createWritable();
+        await writablefile.write(text);
+        await writablefile.close();
+    }
+
+    /* 読み込んだデータをもとに階層リスト作成 */
+    function processData(data) {
+        // document.getElementById("dataarea").innerText = data;
+        let jsondata = JSON.parse(data);
+        let container = document.getElementById("container");
+        // dataarea.innerHTML = data;
+        for (let i = 0; i < Object.keys(jsondata).length; i++) {
+            writeText(jsondata[i], container.getElementsByClassName("listcnt")[0].getElementsByClassName("addButton")[0]);
+
+        }
+    }
+    function writeText(data, element) {
+        let ret = data.text;
+        let btn = addList(element, ret);
+        let childlen = data.childlen;
+        if (childlen == 0)
+            return btn;
+
+        for (let i = 0; i < childlen; i++) {
+            let item = data.childitem[i];
+            if (i == 0) {
+                btn = writeText(item, btn[0]);
+            } else {
+                btn = writeText(item, btn[1]);
+            }
+        }
+        return btn;
+    }
+    function addRootList(element, str) {
+        parent = element.parentNode.parentNode;
+        ulelement = element.parentNode.getElementsByClassName("listcnt");
+        if (parent.id == "container" && ulelement.length > 0) {
+            return;
+        }
+        addList(element, str);
+    }
+    /* 階層リスト作成 */
+    function addList(element, str) {
+        var button = {};
+        //親要素（ulタグ）を取得
+        parent = element.parentNode;
+        //追加行を生成
+        var newli = document.createElement("li");
+        newli.innerHTML = createNewLine(str);
+        newli.className = "list-item";
+        newli.draggable = "true";
+        // let textarea = newli.getElementsByClassName("text")[0];
+        let defaultHeight = newli.getElementsByClassName("text")[0].clientHeight;
+        newli.getElementsByClassName("text")[0].addEventListener('input', function (element) {
+            area = element.target;
+            //textareaの要素の高さを設定（rows属性で行を指定するなら「px」ではなく「auto」で良いかも！）
+            area.style.height = defaultHeight + 'px';
+            //textareaの入力内容の高さを取得
+            let scrollHeight = area.scrollHeight;
+            //textareaの高さに入力内容の高さを設定
+            area.style.height = Math.max(scrollHeight, 30) + 'px';
+        });
+        button[0] = replaceAddButton(newli.getElementsByClassName("listcnt")[0]);
+        //  リスト追加ボタンを削除して行追加
+        element.remove();
+        parent.appendChild(newli);
+        //リスト追加ボタンを最後尾に配置
+        button[1] = replaceAddButton(parent);
+        flexibleWidth(parent);
+        // button[1] = replaceAddButton(parent);
+        return button;
+    }
+
+    /* 階層リストの深さ（横の数）に応じて幅を拡張 */
+    function flexibleWidth(element) {
+        // var parent = element.parentNode;
+        //親要素の幅が一定以下の場合はコンテナの幅を広げる
+        if (element.clientWidth <= 660) {
+            let w = document.getElementById("container").clientWidth
+            document.getElementById("container").style.width = (w + 660) + 'px';
+            return;
+        }
+        // flexibleWidth(element.parentNode.parentNode);
+    }
+    /* リスト内のアイテムを生成。テキストボックスと、子要素追加ボタン。自分削除ボタン */
+    function createNewLine(str) {
+        if (str == null) str = "";
+        var ret = '<textarea class="text" draggable="false" tabindex="'+tabindex+++'">' + str + '</textarea>' + getRemoveButton();
+        ret += '<ul class="listcnt"></ul>' + "\n";
+        return ret;
+    }
+    function replaceAddButton(element) {
+        /* 最後尾にリスト追加ボタンを追加 */
+        var newbtn = document.createElement("input");
+        newbtn.type = "button";
+        newbtn.value = "+"
+        newbtn.tabIndex = "-1";
+        if (element.parentNode.id == "container") {
+            newbtn.setAttribute('onclick', 'addRootList(this)');
+        } else {
+            newbtn.setAttribute('onclick', 'addList(this)');
+        }
+        newbtn.className = "addButton";
+        element.appendChild(newbtn);
+        return newbtn;
+    }
+    function getAddButton() {
+        return '<input type="button" value="+" onclick="addList(this)" class="addButton" tabindex="-1">';
+    }
+    function getRemoveButton() {
+        return '<input type="button" value="-" onclick="removeList(this)" name="remove" tabindex="-1">';
+    }
+    /* 階層リスト削除 */
+    function removeList(element) {
+        element.parentNode.remove();
+    }
+
+    /* ドラッグ&ドロップイベント追加 */
+    function addEvent(element) {
+        let container = element
+        let dragTarget;
+        let parentTarget;
+        let ptop, pleft, pheight, pwidth;
+        let list = container;
+
+        // ドラッグ開始時の処理
+        list.addEventListener("dragstart", (e) => {
+            dragTarget = e.target;
+            list = dragTarget.parentNode;
+            //親要素「ul」タグの位置情報を取得。この位置情報の範囲内でドロップできるようにするため。
+            parentTarget = dragTarget.parentNode;
+            ptop = parentTarget.getBoundingClientRect().top;
+            pleft = parentTarget.getBoundingClientRect().left;
+            pheight = parentTarget.getBoundingClientRect().height;
+            pwidth = parentTarget.getBoundingClientRect().width;
+        });
+        // ドロップ対象に入った時の処理
+        list.addEventListener("dragover", (e) => {
+            e.preventDefault();
+
+            const dropTarget = e.target.closest(".list-item");
+            /* 自分自身の場合は入れ替えない */
+            if (!dropTarget || dropTarget === dragTarget) return;
+
+            const rect = dropTarget.getBoundingClientRect();
+            const middleY = (rect.top + rect.bottom) / 2;
+            //リストタグ「ul」範囲で移動する。
+            if (e.clientY >= ptop && e.clientX >= pleft && e.clientX <= pwidth + pleft && e.clientY <= pheight + ptop) {
+                if (e.clientY < middleY) {
+                    list.insertBefore(dragTarget, dropTarget);
+                } else {
+                    list.insertBefore(dragTarget, dropTarget.nextSibling);
+                }
+            }
+        });
+    }
+    function getTagNameChildNodes($target, $array, $tag) {
+        var e = $target.childNodes;
+        var i = -1;
+        var j = 0;
+        while (++i < e.length) {
+            if (e[i].nodeType == 1) {
+                if (e[i].className == $tag) {
+                    $array[j] = e[i];
+                    j++;
+                }
+            }
+        }
+    }
+</script>
+
+</html>
