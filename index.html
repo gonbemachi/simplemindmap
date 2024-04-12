@@ -26,13 +26,24 @@
             display: flex;
             align-items: flex-start;
         }
-
+        .list-item:has(> .removeButton:hover) {
+            background-color: #808080;
+            & textarea {
+                background-color: #808080;
+            }
+        }
+        .listcnt:has(+ .addButton:hover){
+            border-bottom:5px solid red;
+        }
         /* .addButton {
             margin-left: 100px;
         } */
 
         textarea {
             width: 100px;
+        }
+        textarea:focus{
+            background-color: rgb(255, 242, 219);
         }
 
         #container>.listcnt>.list-item {
@@ -42,6 +53,7 @@
         #container>.listcnt>.addButton {
             margin-left: 5px;
         }
+
     </style>
 
 </head>
@@ -280,7 +292,7 @@
 
         area.style.width = defaultWidth + 'px';
         let scrollWidth = area.scrollWidth;
-        area.style.width = Math.max(scrollWidth + 30, 30) + 'px';
+        area.style.width = Math.max(scrollWidth,104) +'px';
     }
 
     /* 階層リストの深さ（横の数）に応じて幅を拡張 */
@@ -332,7 +344,7 @@
         return newbtn;
     }
     function getRemoveButton() {
-        return '<input type="button" value="-" onclick="removeList(this)" name="remove" tabindex="-1">';
+        return '<input type="button" value="-" onclick="removeList(this)" class="removeButton" name="remove" tabindex="-1">';
     }
     /* 階層リスト削除 */
     function removeList(element) {
